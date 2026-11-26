@@ -1,39 +1,41 @@
 #!/usr/bin/env python3
-"""Draw the 26 November 2026 world-news poster (1024x576 PNG).
+"""Build the news poster for Thursday 26 November 2026.
 
-A newspaper front page: masthead with the date, then six story cards,
-each with a small hand-drawn icon, a headline and one factual line.
-Everything is drawn with Pillow primitives; no external assets.
+Fresh rebuild: six verified stories from the day's news cycle, drawn as a
+newspaper front page with PIL. Deterministic output: fixed layout, fixed
+text, no timestamps, no randomness.
 """
+import os
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1024, 576
-PAPER = (247, 243, 234)      # warm newsprint
-INK = (18, 30, 51)           # deep navy ink
-RED = (178, 34, 34)          # accent red
-GOLD = (201, 162, 39)
-TEAL = (18, 110, 105)
-NAVY2 = (38, 64, 110)
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.png")
+
+PAPER = (246, 241, 231)
+INK = (26, 26, 26)
+NAVY = (19, 41, 75)
+GOLD = (242, 183, 5)
+WHITE = (255, 255, 255)
+CARD = (255, 255, 255)
+GREY = (90, 90, 90)
 
 SERIF_B = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
+SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 SANS_B = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
-f_mast = ImageFont.truetype(SERIF_B, 44)
-f_date = ImageFont.truetype(SANS_B, 19)
-f_tag = ImageFont.truetype(SANS_B, 13)
-f_head = ImageFont.truetype(SERIF_B, 22)
-f_body = ImageFont.truetype(SANS, 16)
-f_src = ImageFont.truetype(SANS_B, 12)
-f_foot = ImageFont.truetype(SANS, 12)
+
+def font(path, size):
+    return ImageFont.truetype(path, size)
 
 
-def wrap(draw, text, font, width):
-    words, lines, cur = text.split(), [], ""
+def wrap(draw, text, fnt, max_w):
+    words = text.split()
+    lines, cur = [], ""
     for w in words:
-        t = (cur + " " + w).strip()
-        if draw.textlength(t, font=font) <= width:
-            cur = t
+        trial = (cur + " " + w).strip()
+        if draw.textlength(trial, font=fnt) <= max_w:
+            cur = trial
         else:
             if cur:
                 lines.append(cur)
@@ -43,114 +45,187 @@ def wrap(draw, text, font, width):
     return lines
 
 
-def icon_chart(d, x, y, c):
-    d.line([(x, y + 26), (x + 12, y + 16), (x + 24, y + 20), (x + 36, y + 4)],
-           fill=c, width=4)
-    d.polygon([(x + 36, y + 4), (x + 30, y + 4), (x + 36, y + 10)], fill=c)
-    d.line([(x, y + 32), (x + 40, y + 32)], fill=c, width=2)
-
-
-def icon_flame(d, x, y, c):
-    d.polygon([(x + 20, y - 2), (x + 32, y + 14), (x + 36, y + 26), (x + 28, y + 36),
-               (x + 12, y + 36), (x + 4, y + 26), (x + 8, y + 14)], fill=c)
-    d.ellipse([x + 14, y + 20, x + 26, y + 32], fill=(255, 210, 90))
-
-
-def icon_drone(d, x, y, c):
-    d.ellipse([x + 12, y + 12, x + 28, y + 28], fill=c)
-    for cx, cy in [(x, y), (x + 40, y), (x, y + 40), (x + 40, y + 40)]:
-        d.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], outline=c, width=3)
-        d.line([(cx, cy), (x + 20, y + 20)], fill=c, width=2)
-
-
-def icon_shirt(d, x, y, c):
-    d.polygon([(x + 12, y + 4), (x + 28, y + 4), (x + 38, y + 12), (x + 34, y + 22),
-               (x + 28, y + 16), (x + 28, y + 38), (x + 12, y + 38), (x + 12, y + 16),
-               (x + 6, y + 22), (x + 2, y + 12)], fill=c)
-
-
-def icon_scales(d, x, y, c):
-    d.line([(x + 20, y + 2), (x + 20, y + 34)], fill=c, width=3)
-    d.line([(x + 4, y + 8), (x + 36, y + 8)], fill=c, width=3)
-    d.line([(x, y + 38), (x + 40, y + 38)], fill=c, width=3)
-    d.polygon([(x + 2, y + 10), (x + 10, y + 10), (x + 6, y + 20)], fill=c)
-    d.polygon([(x + 30, y + 10), (x + 38, y + 10), (x + 34, y + 20)], fill=c)
-
-
-def icon_rock(d, x, y, c):
-    d.ellipse([x + 2, y + 6, x + 38, y + 36], fill=c)
-    d.ellipse([x + 12, y + 12, x + 30, y + 26], fill=(247, 243, 234))
-    for bx, by in [(x + 36, y), (x, y + 30), (x + 38, y + 34)]:
-        d.ellipse([bx, by, bx + 5, by + 5], fill=c)
-
-
 STORIES = [
-    ("MARKETS", RED, icon_chart,
-     "Nasdaq slides nearly 4%",
-     "US stocks fall in early trading as AI worries and new tariff plans spook investors.",
-     "Reuters"),
-    ("GAZA", RED, icon_flame,
-     "Hamas security chief killed in Gaza strike",
-     "Israeli airstrike kills Col. Mohammad Abuelouf, his wife and two daughters in Gaza City.",
-     "Reuters"),
-    ("SUDAN", TEAL, icon_drone,
-     "Sudan drone strikes kill 19",
-     "RSF drones hit Damazin in Blue Nile state, killing 19 civilians, a rights group says.",
-     "AP"),
-    ("BANGLADESH", GOLD, icon_shirt,
-     "Garment pay up 36%",
-     "Minimum wage rises from 12,500 to 17,000 taka after weeks of factory protests.",
-     "BBC"),
-    ("ISRAEL", NAVY2, icon_scales,
-     "Judges: drop Netanyahu charges",
-     "Court recommends the most serious charges against the prime minister be dropped.",
-     "BBC"),
-    ("SPACE", NAVY2, icon_rock,
-     "Asteroid's crater seen up close",
-     "ESA's Hera shows NASA's DART left a stadium-sized crater on Dimorphos.",
-     "Reuters"),
+    dict(
+        kicker="TRADE",
+        accent=(179, 84, 30),
+        icon="tariff",
+        headline="Trump's new tariff salvo hits 14 partners",
+        body="China faces +20%, rising to 40% if the truce fails; the EU, Japan and India are hit too.",
+    ),
+    dict(
+        kicker="ENERGY",
+        accent=(192, 57, 43),
+        icon="refinery",
+        headline="Houthis claim strike on Saudi refinery",
+        body="Satellite images show thick black smoke over Ras Tanura; Brent crude jumps past $93 a barrel.",
+    ),
+    dict(
+        kicker="GAZA",
+        accent=(91, 91, 138),
+        icon="city",
+        headline="Israeli strike kills Hamas security chief",
+        body="Mohammad Abuelouf, his wife and two daughters die in Gaza City \u2014 the second senior Hamas official killed in 24 hours.",
+    ),
+    dict(
+        kicker="SUDAN",
+        accent=(46, 111, 94),
+        icon="drone",
+        headline="Drone strikes kill 19 civilians in Blue Nile",
+        body="RSF drones hit homes in Damazin; 20 wounded. Drones also struck the Roseires dam and power sites.",
+    ),
+    dict(
+        kicker="SPACE",
+        accent=(31, 78, 121),
+        icon="rocket",
+        headline="Pakistan's first astronaut in orbit",
+        body="Muhammad Zeeshan Ali docks at China's Tiangong station on Shenzhou-24 \u2014 its first foreign visitor.",
+    ),
+    dict(
+        kicker="INDIA",
+        accent=(176, 124, 12),
+        icon="candle",
+        headline="India marks 18 years since Mumbai attacks",
+        body="The nation honours the 26/11 victims and celebrates Constitution Day on 26 November.",
+    ),
 ]
 
-img = Image.new("RGB", (W, H), PAPER)
-d = ImageDraw.Draw(img)
 
-# Masthead
-d.rectangle([0, 0, W, 118], fill=INK)
-title = "THE WORLD IN ONE DAY"
-tw = d.textlength(title, font=f_mast)
-d.text(((W - tw) / 2, 14), title, font=f_mast, fill=PAPER)
-date = "THURSDAY  26  NOVEMBER  2026"
-dw = d.textlength(date, font=f_date)
-d.text(((W - dw) / 2, 72), date, font=f_date, fill=(232, 196, 90))
-d.line([(40, 108), (W - 40, 108)], fill=(232, 196, 90), width=2)
+def draw_icon(d, kind, cx, cy, accent):
+    """Simple flat pictogram centred at (cx, cy), about 64x52."""
+    if kind == "tariff":
+        # bar chart + percent
+        base = cy + 22
+        for i, h in enumerate((16, 26, 38)):
+            x0 = cx - 30 + i * 20
+            d.rectangle([x0, base - h, x0 + 13, base], fill=accent)
+        d.text((cx + 12, cy - 26), "%", font=font(SANS_B, 26), fill=accent)
+    elif kind == "refinery":
+        # towers + flame
+        d.rectangle([cx - 30, cy - 6, cx - 14, cy + 22], fill=accent)
+        d.rectangle([cx - 8, cy - 16, cx + 8, cy + 22], fill=accent)
+        d.rectangle([cx + 14, cy + 2, cx + 30, cy + 22], fill=accent)
+        d.polygon([(cx - 4, cy - 16), (cx + 2, cy - 32), (cx + 8, cy - 16)],
+                  fill=(242, 183, 5))
+        d.polygon([(cx - 1, cy - 16), (cx + 2, cy - 26), (cx + 5, cy - 16)],
+                  fill=(230, 90, 30))
+    elif kind == "city":
+        # skyline, one building cracked/tilted
+        d.rectangle([cx - 32, cy - 4, cx - 16, cy + 22], fill=accent)
+        d.rectangle([cx - 12, cy - 18, cx + 4, cy + 22], fill=accent)
+        d.polygon([(cx + 8, cy + 22), (cx + 12, cy - 10), (cx + 28, cy - 14),
+                   (cx + 30, cy + 22)], fill=accent)
+        d.line([cx - 12, cy - 18, cx - 4, cy - 8, cx - 12, cy + 2],
+               fill=WHITE, width=2)
+        for bx, by in ((-28, 2), (-8, -12), (16, 4)):
+            d.rectangle([cx + bx, cy + by, cx + bx + 4, cy + by + 4],
+                        fill=(242, 183, 5))
+    elif kind == "drone":
+        # quadcopter: body + 4 rotors
+        d.ellipse([cx - 10, cy - 6, cx + 10, cy + 8], fill=accent)
+        d.ellipse([cx - 3, cy - 2, cx + 3, cy + 4], fill=WHITE)
+        for sx, sy in ((-26, -16), (26, -16), (-26, 14), (26, 14)):
+            d.line([cx, cy, cx + sx, cy + sy], fill=accent, width=2)
+            d.ellipse([cx + sx - 9, cy + sy - 3, cx + sx + 9, cy + sy + 3],
+                      outline=accent, width=3)
+    elif kind == "rocket":
+        # rocket + flame + stars
+        d.polygon([(cx, cy - 28), (cx - 9, cy - 6), (cx + 9, cy - 6)],
+                  fill=accent)
+        d.rectangle([cx - 9, cy - 8, cx + 9, cy + 12], fill=accent)
+        d.polygon([(cx - 9, cy + 12), (cx - 16, cy + 22), (cx - 9, cy + 16)],
+                  fill=accent)
+        d.polygon([(cx + 9, cy + 12), (cx + 16, cy + 22), (cx + 9, cy + 16)],
+                  fill=accent)
+        d.polygon([(cx - 4, cy + 12), (cx, cy + 26), (cx + 4, cy + 12)],
+                  fill=(242, 183, 5))
+        d.ellipse([cx - 4, cy - 2, cx + 4, cy + 6], fill=WHITE)
+        for sx, sy in ((-30, -20), (30, -14), (-28, 14)):
+            d.text((cx + sx, cy + sy), "*", font=font(SANS_B, 16),
+                   fill=(242, 183, 5))
+    elif kind == "candle":
+        # memorial candle + flame
+        d.rectangle([cx - 7, cy - 2, cx + 7, cy + 22], fill=accent)
+        d.rectangle([cx - 11, cy + 22, cx + 11, cy + 26], fill=INK)
+        d.polygon([(cx, cy - 26), (cx - 6, cy - 10), (cx + 6, cy - 10)],
+                  fill=(242, 183, 5))
+        d.polygon([(cx, cy - 20), (cx, cy - 10), (cx + 3, cy - 10)],
+                  fill=(230, 90, 30))
 
-# Story grid: 3 columns x 2 rows
-GX, GY, CW, CH, GAP = 24, 134, 312, 196, 20
-for i, (tag, color, icon, head, body, src) in enumerate(STORIES):
-    col, row = i % 3, i // 3
-    x = GX + col * (CW + GAP)
-    y = GY + row * (CH + GAP)
-    d.rectangle([x, y, x + CW, y + CH], outline=(190, 182, 165), width=2)
-    d.rectangle([x, y, x + CW, y + 30], fill=color)
-    d.text((x + 10, y + 7), tag, font=f_tag, fill=(255, 255, 255))
-    icon(d, x + CW - 52, y + 42, color)
-    lines = wrap(d, head, f_head, CW - 66)
-    ly = y + 40
-    for ln in lines[:2]:
-        d.text((x + 10, ly), ln, font=f_head, fill=INK)
-        ly += 25
-    blines = wrap(d, body, f_body, CW - 20)
-    by = y + 40 + len(lines[:2]) * 25 + 6
-    for ln in blines[:3]:
-        d.text((x + 10, by), ln, font=f_body, fill=(52, 58, 68))
-        by += 20
-    d.line([(x + 10, y + CH - 26), (x + CW - 10, y + CH - 26)], fill=(190, 182, 165), width=1)
-    d.text((x + 10, y + CH - 21), "Source: " + src, font=f_src, fill=(110, 104, 90))
 
-# Footer
-d.line([(24, H - 26), (W - 24, H - 26)], fill=(190, 182, 165), width=1)
-d.text((24, H - 21), "Sources: Reuters  ·  BBC  ·  AP  ·  CNN  —  Thursday's world news, 26 November 2026",
-       font=f_foot, fill=(110, 104, 90))
+def build():
+    img = Image.new("RGB", (W, H), PAPER)
+    d = ImageDraw.Draw(img)
 
-img.save("entry.png", optimize=True)
-print("saved entry.png", img.size)
+    # ---- masthead ----
+    d.rectangle([0, 0, W, 84], fill=NAVY)
+    d.text((18, 12), "THE WORLD IN ONE DAY",
+           font=font(SERIF_B, 40), fill=WHITE)
+    d.text((18, 58), "Six stories that defined the day",
+           font=font(SERIF, 16), fill=(200, 210, 225))
+    date_f = font(SANS_B, 21)
+    d.text((W - 18 - d.textlength("THURSDAY 26 NOVEMBER 2026", font=date_f),
+            16), "THURSDAY 26 NOVEMBER 2026", font=date_f, fill=GOLD)
+    d.text((W - 18 - d.textlength("THE DAY IN SIX PICTURES",
+                                  font=font(SANS, 13)),
+            50), "THE DAY IN SIX PICTURES", font=font(SANS, 13),
+           fill=(200, 210, 225))
+    d.rectangle([0, 84, W, 88], fill=GOLD)
+
+    # ---- deck ----
+    deck = ("A tariff salvo, a refinery in flames, a ceasefire under strain "
+            "\u2014 and a first Pakistani in orbit.")
+    d.text((18, 98), deck, font=font(SERIF, 17), fill=INK)
+
+    # ---- story grid: 3 x 2 ----
+    margin, gutter = 16, 12
+    cw = (W - 2 * margin - 2 * gutter) // 3
+    ch = 196
+    y0 = 132
+    for i, s in enumerate(STORIES):
+        col, row = i % 3, i // 3
+        x = margin + col * (cw + gutter)
+        y = y0 + row * (ch + gutter)
+        accent = s["accent"]
+        d.rectangle([x, y, x + cw, y + ch], fill=CARD, outline=INK, width=2)
+        d.rectangle([x, y, x + cw, y + 6], fill=accent)
+        # pictogram on tinted panel (left) with text on the right
+        d.rectangle([x + 2, y + 8, x + 82, y + 66], fill=(246, 241, 231))
+        draw_icon(d, s["icon"], x + 42, y + 38, accent)
+        tx = x + 92
+        d.text((tx, y + 14), s["kicker"], font=font(SANS_B, 13), fill=accent)
+        head_lines = wrap(d, s["headline"], font(SANS_B, 17), cw - 102)[:2]
+        hy = y + 34
+        for ln in head_lines:
+            d.text((tx, hy), ln, font=font(SANS_B, 17), fill=INK)
+            hy += 21
+        # body under the pictogram row, below however many headline lines
+        body_lines = wrap(d, s["body"], font(SANS, 13), cw - 20)[:3]
+        by = y + 34 + 21 * len(head_lines) + 8
+        for ln in body_lines:
+            d.text((x + 10, by), ln, font=font(SANS, 13), fill=(60, 60, 60))
+            by += 17
+        # thin divider above footer of card
+        d.line([x + 10, y + ch - 26, x + cw - 10, y + ch - 26],
+               fill=(220, 220, 220), width=1)
+        d.text((x + 10, y + ch - 22), "26 NOV 2026",
+               font=font(SANS_B, 10), fill=GREY)
+
+    # ---- footer ----
+    fy = y0 + 2 * ch + gutter
+    d.rectangle([0, fy + 4, W, H], fill=NAVY)
+    d.text((18, fy + 16),
+           "Sources: Reuters  \u00b7  France 24  \u00b7  Al Jazeera  \u00b7  Xinhua  \u2014  the day's front pages",
+           font=font(SANS, 13), fill=WHITE)
+    d.text((W - 18 - d.textlength("All six stories reported 25\u201326 November 2026",
+                                  font=font(SANS, 13)),
+            fy + 16),
+           "All six stories reported 25\u201326 November 2026",
+           font=font(SANS, 13), fill=(200, 210, 225))
+
+    img.save(OUT, "PNG", optimize=True)
+    print("wrote", OUT, img.size)
+
+
+if __name__ == "__main__":
+    build()
